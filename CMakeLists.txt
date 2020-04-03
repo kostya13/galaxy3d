@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.13)
+project(galaxy3d)
+find_package(OpenGL REQUIRED)
+find_package(GLEW  REQUIRED)
+find_package(glfw3 REQUIRED)
+add_library(shader STATIC shader.c)
+
+add_executable(main main.c)
+target_link_libraries(main glfw)
+target_link_libraries(main GLEW)
+target_link_libraries(main GL)
+target_link_libraries(main shader)
