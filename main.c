@@ -42,18 +42,71 @@ int main(/*int argc, char** argv*/)
 		glfwTerminate();
 		return -1;
 	}
-    LoadShaders("path1", "path2");
+
 	// Ensure we can capture the escape key being pressed below
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 
 	// Dark blue background
 	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 
+    GLuint ProgramID = LoadShaders("../shaders/SimpleVertexShader.vertexshader", "../shaders/SimpleFragmentShader.fragmentshader");
+    if(ProgramID == 0)
+    {
+       fprintf(stderr, "Failed to lad shaders.\n" );
+       getchar();
+       glfwTerminate();
+       return -1;
+    }
+
+    // Get a handle for our buffers
+    GLuint vertexPosition_modelspaceID = glGetAttribLocation(ProgramID, "vertexPosition_modelspace");
+
+    GLfloat vertices[] = {
+         0.5f,  0.5f, 0.0f,  // Верхний правый угол
+         0.5f, -0.5f, 0.0f,  // Нижний правый угол
+        -0.5f, -0.5f, 0.0f,  // Нижний левый угол
+        -0.5f,  0.5f, 0.0f   // Верхний левый угол
+    };
+
+    GLuint indices[] = {  // Помните, что мы начинаем с 0!
+        0, 1, 3,   // Первый треугольник
+        1, 2, 3    // Второй треугольник
+    };
+
+    GLuint vertexbuffer;
+    GLuint EBO;
+    glGenBuffers(1, &EBO);
+    glGenBuffers(1, &vertexbuffer);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
 	do{
 		// Clear the screen. It's not mentioned before Tutorial 02, but it can cause flickering, so it's there nonetheless.
 		glClear( GL_COLOR_BUFFER_BIT );
 
 		// Draw nothing, see you in tutorial 2 !
+        glUseProgram(ProgramID);
+
+        glEnableVertexAttribArray(vertexPosition_modelspaceID);
+        glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+        glVertexAttribPointer(
+            vertexPosition_modelspaceID, // The attribute we want to configure
+            3,                  // size
+            GL_FLOAT,           // type
+            GL_FALSE,           // normalized?
+            0,                  // stride
+            (void*)0            // array buffer offset
+        );
+
+        // Draw the triangle !
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        glDisableVertexAttribArray(vertexPosition_modelspaceID);
 
 		
 		// Swap buffers
