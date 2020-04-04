@@ -4,8 +4,10 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include "shader.h"
+#include "cglm/cglm.h"
 
+#include "shader.h"
+#include "tinyobj_loader_c.h"
 
 int main(/*int argc, char** argv*/)
 {
