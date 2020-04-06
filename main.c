@@ -138,7 +138,8 @@ int main(/*int argc, char** argv*/)
     size_t num_materials;
 
     size_t data_len = 0;
-    const char* data = get_file_data(&data_len, "../models/box.obj");
+    const char* data = get_file_data(&data_len, "../models/fighter.obj");
+    //const char* data = get_file_data(&data_len, "../models/box2.obj");
     if (data == NULL) {
       exit(-1);
     }
@@ -160,35 +161,89 @@ int main(/*int argc, char** argv*/)
       }
 */
 
-
-    GLfloat vertices1[attrib.num_vertices * 3];
-    for(int i=0; i<attrib.num_vertices;i++)
+    int vertex_counter[num_materials][attrib.num_vertices];
+    for(int i=0; i<num_materials;i++)
     {
-        vertices1[i * 3 + 0]= attrib.vertices[i * 3 + 0];
-        vertices1[i * 3 + 1]= attrib.vertices[i * 3 + 1];
-        vertices1[i * 3 + 2]= attrib.vertices[i * 3 + 2];
-
-    }
-
-    GLfloat colors1[attrib.num_vertices * 3];
-    for(int i=0; i<attrib.num_face_num_verts;i++)
-    {
-        tinyobj_material_t material;
-        int c_id = attrib.material_ids[i];
-        material = materials[c_id];
-        for(int j=0;j<3;j++)
+        for(int j=0; j<attrib.num_vertices;j++)
         {
-            int face_id = attrib.faces[i * 3 + j].v_idx;
-            colors1[face_id * 3 + 0] =  material.diffuse[0];
-            colors1[face_id * 3 + 1] =  material.diffuse[1];
-            colors1[face_id * 3 + 2] =  material.diffuse[2];
+            vertex_counter[i][j] = -1;
         }
     }
 
-    GLuint indices1[attrib.num_faces];
     for(int i=0; i<attrib.num_faces;i++)
     {
-        indices1[i]= attrib.faces[i].v_idx;
+        int face_num = (int)i/3;
+        int material = attrib.material_ids[face_num];
+        int idx = attrib.faces[i].v_idx;
+        vertex_counter[material][idx] = 1;
+    }
+    int vertex_for_material[num_materials];
+    int offsets[num_materials];
+    int total_vertex = 0;
+    for(int i=0; i<num_materials;i++)
+    {
+
+        int c = 0;
+        offsets[i] = total_vertex;
+        for(int j=0; j<attrib.num_vertices;j++)
+        {
+            if (vertex_counter[i][j] == 1)
+                c++;
+        }
+        vertex_for_material[i] = c;
+        total_vertex += c;
+    }
+
+
+    GLfloat vertices1[total_vertex * 3];
+    GLuint indices1[attrib.num_faces];
+    int idx_mapper[attrib.num_vertices];
+
+    int pos = 0;
+    int prev_material = -1;
+    for(int i=0; i<attrib.num_faces;i++)
+    {
+        int face_num = (int)i/3;
+        int material = attrib.material_ids[face_num];
+        if (prev_material != material)
+        {
+            prev_material = material;
+            pos = 0;
+            for(int j=0; j<attrib.num_vertices;j++)
+            {
+                idx_mapper[j] = -1;
+            }
+        }
+        int offset = offsets[material];
+        int idx = attrib.faces[i].v_idx;
+        if (idx_mapper[idx] < 0)
+        {
+            idx_mapper[idx] = offset + pos;
+            indices1[i] = offset + pos;
+            int base = (offset + pos) * 3;
+            vertices1[base + 0] = attrib.vertices[idx * 3 + 0];
+            vertices1[base + 1] = attrib.vertices[idx * 3 + 1];
+            vertices1[base + 2] = attrib.vertices[idx * 3 + 2];
+            pos ++;
+        }
+        else
+        {
+            indices1[i] = idx_mapper[idx];
+        }
+    }
+
+    GLfloat colors1[total_vertex * 3];
+    int mpos =0;
+    for(int i=0; i<num_materials;i++)
+    {
+        tinyobj_material_t material = materials[i];
+        for(int j=0; j<vertex_for_material[i];j++)
+        {
+            colors1[mpos * 3 + 0] =  material.diffuse[0];
+            colors1[mpos * 3 + 1] =  material.diffuse[1];
+            colors1[mpos * 3 + 2] =  material.diffuse[2];
+            mpos++;
+        }
     }
 
 
@@ -238,7 +293,8 @@ int main(/*int argc, char** argv*/)
     glm_perspective(45.0f, 4/3, 0.1f, 100.0f, Projection);
 
     mat4 View;
-    vec3 camera = {0.4,0.3,0.2};
+    //vec3 camera = {0.4,0.3,0.2};
+    vec3 camera = {10,10,10};
     vec3 origin = {0,0,0};
     vec3 head = {0,1,0};
     glm_lookat(
@@ -258,8 +314,9 @@ int main(/*int argc, char** argv*/)
     GLuint MatrixID = glGetUniformLocation(ProgramID, "MVP");
 
 	do{
-        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_DEPTH_TEST); //| GL_CULL_FACE);
         glDepthFunc(GL_LESS);
+        //glCullFace(GL_FRONT);
         //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 		// Clear the screen. It's not mentioned before Tutorial 02, but it can cause flickering, so it's there nonetheless.
