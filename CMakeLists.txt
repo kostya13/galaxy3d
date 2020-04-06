@@ -5,7 +5,7 @@ find_package(GLEW  REQUIRED)
 find_package(glfw3 REQUIRED)
 
 add_executable(main main.c shader.c)
-include_directories(include)
+include_directories(include include/cgml)
 target_link_libraries(main glfw)
 target_link_libraries(main GLEW)
 target_link_libraries(main GL)
