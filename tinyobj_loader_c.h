@@ -24,8 +24,6 @@
 #ifndef TINOBJ_LOADER_C_H_
 #define TINOBJ_LOADER_C_H_
 
-#define TINYOBJ_LOADER_C_IMPLEMENTATION
-
 /* @todo { Remove stddef dependency. size_t? } */
 #include <stddef.h>
 
@@ -97,10 +95,10 @@ typedef struct {
 extern int tinyobj_parse_obj(tinyobj_attrib_t *attrib, tinyobj_shape_t **shapes,
                              size_t *num_shapes, tinyobj_material_t **materials,
                              size_t *num_materials, const char *buf, size_t len,
-                             unsigned int flags);
+                             unsigned int flags, const char* model_dir);
 extern int tinyobj_parse_mtl_file(tinyobj_material_t **materials_out,
                                   size_t *num_materials_out,
-                                  const char *filename);
+                                  const char *filename, const char* model_dir);
 
 extern void tinyobj_attrib_init(tinyobj_attrib_t *attrib);
 extern void tinyobj_attrib_free(tinyobj_attrib_t *attrib);
@@ -726,7 +724,7 @@ static tinyobj_material_t *tinyobj_material_add(tinyobj_material_t *prev,
 
 static int tinyobj_parse_and_index_mtl_file(tinyobj_material_t **materials_out,
                                             size_t *num_materials_out,
-                                            const char *filename,
+                                            const char *filename, const char* model_dir,
                                             hash_table_t* material_table) {
   tinyobj_material_t material;
   size_t buffer_size = 128;
@@ -748,7 +746,12 @@ static int tinyobj_parse_and_index_mtl_file(tinyobj_material_t **materials_out,
   (*materials_out) = NULL;
   (*num_materials_out) = 0;
 
-  fp = fopen(filename, "r");
+  char fullpath[strlen(filename) + strlen(model_dir) + 2]; // 2 - слеш и финальный 0
+  strcpy(fullpath, model_dir);
+  strcat(fullpath, "/");
+  strcat(fullpath, filename);
+
+  fp = fopen(fullpath, "r");
   if (!fp) {
     fprintf(stderr, "TINYOBJ: Error reading file '%s': %s (%d)\n", filename, strerror(errno), errno);
     return TINYOBJ_ERROR_FILE_OPERATION;
@@ -968,8 +971,8 @@ static int tinyobj_parse_and_index_mtl_file(tinyobj_material_t **materials_out,
 
 int tinyobj_parse_mtl_file(tinyobj_material_t **materials_out,
                            size_t *num_materials_out,
-                           const char *filename) {
-  return tinyobj_parse_and_index_mtl_file(materials_out, num_materials_out, filename, NULL);
+                           const char *filename, const char* model_dir) {
+  return tinyobj_parse_and_index_mtl_file(materials_out, num_materials_out, filename, model_dir, NULL);
 } 
 
 
@@ -1210,7 +1213,7 @@ static int is_line_ending(const char *p, size_t i, size_t end_i) {
 int tinyobj_parse_obj(tinyobj_attrib_t *attrib, tinyobj_shape_t **shapes,
                       size_t *num_shapes, tinyobj_material_t **materials_out,
                       size_t *num_materials_out, const char *buf, size_t len,
-                      unsigned int flags) {
+                      unsigned int flags, const char* model_dir) {
   LineInfo *line_infos = NULL;
   Command *commands = NULL;
   size_t num_lines = 0;
@@ -1319,7 +1322,7 @@ int tinyobj_parse_obj(tinyobj_attrib_t *attrib, tinyobj_shape_t **shapes,
     char *filename = my_strndup(commands[mtllib_line_index].mtllib_name,
                                 commands[mtllib_line_index].mtllib_name_len);
 
-    int ret = tinyobj_parse_and_index_mtl_file(&materials, &num_materials, filename, &material_table);
+    int ret = tinyobj_parse_and_index_mtl_file(&materials, &num_materials, filename, model_dir, &material_table);
 
     if (ret != TINYOBJ_SUCCESS) {
       /* warning. */

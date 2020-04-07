@@ -5,26 +5,8 @@
 #include <GL/glew.h>
 
 #include "shader.h"
+#include "memory.h"
 
-char* load_file(const char* filename)
-{
-    FILE *f = fopen(filename, "rb");
-    if (f==NULL)
-    {
-        printf("Cannot open file.\n");
-        return NULL;
-    }
-    fseek(f, 0, SEEK_END);
-    size_t fsize = (size_t)ftell(f);
-    fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
-
-    char *string = malloc(fsize + 1);
-    fread(string, 1, fsize, f);
-    fclose(f);
-
-    string[fsize] = 0;
-    return string;
-}
 
 void error_message(GLuint ShaderID, GLsizei InfoLogLength)
 {
@@ -42,15 +24,17 @@ GLuint LoadShaders(const char * vertex_file_path,const char * fragment_file_path
 	GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
 
 	// Read the Vertex Shader code from the file
-    const char* VertexShaderCode = load_file(vertex_file_path);
+    size_t len_vertex_code;
+    const char* VertexShaderCode = get_file_data(&len_vertex_code, vertex_file_path);
     if(VertexShaderCode == NULL)
     {
         printf("Impossible to open %s. Are you in the right directory ? \n", vertex_file_path);
         return 0;
 	}
 
-	// Read the Fragment Shader code from the file
-    const char* FragmentShaderCode = load_file(fragment_file_path);
+    // Read the Fragment Shader code from the
+    size_t len_fragment_code;
+    const char* FragmentShaderCode = get_file_data(&len_fragment_code, fragment_file_path);
     if(FragmentShaderCode == NULL)
     {
         printf("Impossible to open %s. Are you in the right directory ? \n", fragment_file_path);
@@ -109,8 +93,8 @@ GLuint LoadShaders(const char * vertex_file_path,const char * fragment_file_path
 	glDeleteShader(VertexShaderID);
 	glDeleteShader(FragmentShaderID);
 
-    free((void*)VertexShaderCode);
-    free((void*)FragmentShaderCode);
+    unmap_file(len_vertex_code, FragmentShaderCode);
+    unmap_file(len_fragment_code, FragmentShaderCode);
 
 	return ProgramID;
 }

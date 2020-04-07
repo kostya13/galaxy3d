@@ -1,81 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
 #include <cglm/cglm.h>
 
 #include "shader.h"
-#include "tinyobj_loader_c.h"
-
-static const char* mmap_file(size_t* len, const char* filename) {
-  FILE* f;
-  long file_size;
-  struct stat sb;
-  char* p;
-  int fd;
-
-  (*len) = 0;
-
-  f = fopen(filename, "r");
-  if (fd == -1) {
-    perror("open");
-    return NULL;
-  }
-
-  fseek(f, 0, SEEK_END);
-  file_size = ftell(f);
-  fclose(f);
-
-  fd = open(filename, O_RDONLY);
-  if (fd == -1) {
-    perror("open");
-    return NULL;
-  }
-
-  if (fstat(fd, &sb) == -1) {
-    perror("fstat");
-    return NULL;
-  }
-
-  if (!S_ISREG(sb.st_mode)) {
-    fprintf(stderr, "%s is not a file\n", "lineitem.tbl");
-    return NULL;
-  }
-  p = (char*)mmap(0, (size_t)file_size, PROT_READ, MAP_SHARED, fd, 0);
-
-  if (p == MAP_FAILED) {
-    perror("mmap");
-    return NULL;
-  }
-
-  if (close(fd) == -1) {
-    perror("close");
-    return NULL;
-  }
-
-  (*len) = (size_t)file_size;
-
-  return p;
-}
-
-static const char* get_file_data(size_t* len, const char* filename) {
-  size_t data_len = 0;
-  const char* data = NULL;
-
-   data = mmap_file(&data_len, filename);
-
-
-  (*len) = data_len;
-  return data;
-}
+#include "objloader.h"
 
 
 int main(/*int argc, char** argv*/)
@@ -118,11 +50,7 @@ int main(/*int argc, char** argv*/)
 	// Ensure we can capture the escape key being pressed below
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 
-	// Dark blue background
-	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
-
-
-    GLuint ProgramID = LoadShaders("../shaders/SimpleVertexShader.vertexshader", "../shaders/SimpleFragmentShader.fragmentshader");
+    GLuint ProgramID = LoadShaders("shaders/SimpleVertexShader.vertexshader", "shaders/SimpleFragmentShader.fragmentshader");
     if(ProgramID == 0)
     {
        fprintf(stderr, "Failed to load shaders.\n" );
@@ -131,122 +59,17 @@ int main(/*int argc, char** argv*/)
        return -1;
     }
 
-    tinyobj_attrib_t attrib;
-    tinyobj_shape_t* shapes = NULL;
-    size_t num_shapes;
-    tinyobj_material_t* materials = NULL;
-    size_t num_materials;
-
-    size_t data_len = 0;
-    const char* data = get_file_data(&data_len, "../models/fighter.obj");
-    //const char* data = get_file_data(&data_len, "../models/box2.obj");
-    if (data == NULL) {
-      exit(-1);
+    model_data_t model_data = load_obj("fighter.obj", "models");
+    if(model_data.vertices == NULL)
+    {
+        fprintf(stderr, "Failed to load models.\n" );
+        glfwTerminate();
+        return -1;
     }
-    printf("filesize: %d\n", (int)data_len);
-
-
-      unsigned int flags = 0;
-      int ret = tinyobj_parse_obj(&attrib, &shapes, &num_shapes, &materials,
-                                  &num_materials, data, data_len, flags);
-      if (ret != TINYOBJ_SUCCESS) {
-        return 0;
-      }
 /*
-      printf("# of shapes    = %d\n", (int)num_shapes);
-      printf("# of materials = %d\n", (int)num_materials);
-      printf("#num_face_num_verts= %d\n", attrib.num_face_num_verts);
-      for (int i = 0; i < attrib.num_face_num_verts; i++) {
-      printf("%d ", attrib.material_ids[i]);
-      }
+    for(int i=0;i<model_data.num_vertices*3;i++)
+        printf("%f ", model_data.colors[i]);
 */
-
-    int vertex_counter[num_materials][attrib.num_vertices];
-    for(int i=0; i<num_materials;i++)
-    {
-        for(int j=0; j<attrib.num_vertices;j++)
-        {
-            vertex_counter[i][j] = -1;
-        }
-    }
-
-    for(int i=0; i<attrib.num_faces;i++)
-    {
-        int face_num = (int)i/3;
-        int material = attrib.material_ids[face_num];
-        int idx = attrib.faces[i].v_idx;
-        vertex_counter[material][idx] = 1;
-    }
-    int vertex_for_material[num_materials];
-    int offsets[num_materials];
-    int total_vertex = 0;
-    for(int i=0; i<num_materials;i++)
-    {
-
-        int c = 0;
-        offsets[i] = total_vertex;
-        for(int j=0; j<attrib.num_vertices;j++)
-        {
-            if (vertex_counter[i][j] == 1)
-                c++;
-        }
-        vertex_for_material[i] = c;
-        total_vertex += c;
-    }
-
-
-    GLfloat vertices1[total_vertex * 3];
-    GLuint indices1[attrib.num_faces];
-    int idx_mapper[attrib.num_vertices];
-
-    int pos = 0;
-    int prev_material = -1;
-    for(int i=0; i<attrib.num_faces;i++)
-    {
-        int face_num = (int)i/3;
-        int material = attrib.material_ids[face_num];
-        if (prev_material != material)
-        {
-            prev_material = material;
-            pos = 0;
-            for(int j=0; j<attrib.num_vertices;j++)
-            {
-                idx_mapper[j] = -1;
-            }
-        }
-        int offset = offsets[material];
-        int idx = attrib.faces[i].v_idx;
-        if (idx_mapper[idx] < 0)
-        {
-            idx_mapper[idx] = offset + pos;
-            indices1[i] = offset + pos;
-            int base = (offset + pos) * 3;
-            vertices1[base + 0] = attrib.vertices[idx * 3 + 0];
-            vertices1[base + 1] = attrib.vertices[idx * 3 + 1];
-            vertices1[base + 2] = attrib.vertices[idx * 3 + 2];
-            pos ++;
-        }
-        else
-        {
-            indices1[i] = idx_mapper[idx];
-        }
-    }
-
-    GLfloat colors1[total_vertex * 3];
-    int mpos =0;
-    for(int i=0; i<num_materials;i++)
-    {
-        tinyobj_material_t material = materials[i];
-        for(int j=0; j<vertex_for_material[i];j++)
-        {
-            colors1[mpos * 3 + 0] =  material.diffuse[0];
-            colors1[mpos * 3 + 1] =  material.diffuse[1];
-            colors1[mpos * 3 + 2] =  material.diffuse[2];
-            mpos++;
-        }
-    }
-
-
     GLuint vertexbuffer;
     GLuint EBO;
     GLuint VertexArrayID;
@@ -260,7 +83,7 @@ int main(/*int argc, char** argv*/)
 
     glBindVertexArray(VertexArrayID);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices1), vertices1, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(model_data.vertices)*model_data.num_vertices*3, model_data.vertices, GL_STATIC_DRAW);
 
     glVertexAttribPointer(
         0, // The attribute we want to configure
@@ -273,7 +96,7 @@ int main(/*int argc, char** argv*/)
     glEnableVertexAttribArray(0);
 
     glBindBuffer(GL_ARRAY_BUFFER, colorbuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(colors1), colors1, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(model_data.colors)*model_data.num_vertices*3, model_data.colors, GL_STATIC_DRAW);
     glVertexAttribPointer(
         1,                                // Атрибут. Здесь необязательно указывать 1, но главное, чтобы это значение совпадало с layout в шейдере..
         3,                                // Размер
@@ -285,7 +108,7 @@ int main(/*int argc, char** argv*/)
     glEnableVertexAttribArray(1);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1), indices1, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(model_data.indices)*model_data.num_faces, model_data.indices, GL_STATIC_DRAW);
 
     glBindVertexArray(0);
 
@@ -313,23 +136,22 @@ int main(/*int argc, char** argv*/)
 
     GLuint MatrixID = glGetUniformLocation(ProgramID, "MVP");
 
+    // Dark blue background
+    glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 	do{
         glEnable(GL_DEPTH_TEST); //| GL_CULL_FACE);
         glDepthFunc(GL_LESS);
         //glCullFace(GL_FRONT);
         //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-		// Clear the screen. It's not mentioned before Tutorial 02, but it can cause flickering, so it's there nonetheless.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Draw nothing, see you in tutorial 2 !
         glUseProgram(ProgramID);
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &mvp[0][0]);
-        //glEnableVertexAttribArray(vertexPosition_modelspaceID);
         glBindVertexArray(VertexArrayID);
 
         // Draw the triangle !
-        glDrawElements(GL_TRIANGLES, attrib.num_faces, GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, model_data.num_faces, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
 		
 		// Swap buffers
