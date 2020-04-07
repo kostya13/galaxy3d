@@ -22,8 +22,6 @@ model_data_t load_obj(const char* filename, const char* model_dir)
     if (data == NULL) {
       exit(-1);
     }
-    printf("filesize: %d\n", (int)data_len);
-
 
     model_data_t model_data;
     model_data.vertices = NULL;
@@ -38,6 +36,7 @@ model_data_t load_obj(const char* filename, const char* model_dir)
     if (ret != TINYOBJ_SUCCESS) {
       return model_data;
     }
+    unmap_file(data_len, data);
 
     int vertex_counter[num_materials][attrib.num_vertices];
     for(size_t i=0; i<num_materials; i++)
@@ -116,8 +115,6 @@ model_data_t load_obj(const char* filename, const char* model_dir)
         }
     }
 
-
-
     model_data.vertices = (GLfloat *)malloc(sizeof(vertices));
     memcpy(model_data.vertices, vertices, sizeof(vertices));
     model_data.colors = (GLfloat *)malloc(sizeof(colors));
@@ -126,6 +123,10 @@ model_data_t load_obj(const char* filename, const char* model_dir)
     memcpy(model_data.indices, indices, sizeof(indices));
     model_data.num_faces = attrib.num_faces;
     model_data.num_vertices = total_vertex;
+
+    tinyobj_attrib_free(&attrib);
+    tinyobj_shapes_free(shapes, num_shapes);
+    tinyobj_materials_free(materials, num_materials);
 
     return model_data;
 }

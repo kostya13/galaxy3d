@@ -12,15 +12,21 @@
 
 int main(/*int argc, char** argv*/)
 {
+    printf("Hello Galaxy 3D!\n");
+
+    model_data_t model_data = load_obj("fighter.obj", "models");
+    if(model_data.vertices == NULL)
+    {
+        fprintf(stderr, "Failed to load models.\n" );
+        return -1;
+    }
 
     GLFWwindow* window;
 
-	printf("Hello Galaxy 3D!\n");
 	// Initialise GLFW
 	if( !glfwInit() )
 	{
 		fprintf( stderr, "Failed to initialize GLFW\n" );
-		getchar();
 		return -1;
 	}
 
@@ -28,48 +34,34 @@ int main(/*int argc, char** argv*/)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
-
 	// Open a window and create its OpenGL context
     window = glfwCreateWindow( 1024, 768, "Galaxy 3D", NULL, NULL);
 	if( window == NULL ){
 		fprintf( stderr, "Failed to open GLFW window.\n" );
-		getchar();
-		glfwTerminate();
-		return -1;
-	}
-	glfwMakeContextCurrent(window);
-
-	// Initialize GLEW
-	if (glewInit() != GLEW_OK) {
-		fprintf(stderr, "Failed to initialize GLEW\n");
-		getchar();
 		glfwTerminate();
 		return -1;
 	}
 
-	// Ensure we can capture the escape key being pressed below
-	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
+    glfwMakeContextCurrent(window); // Должно быть перед инициализацией GLEW
+
+    // Ensure we can capture the escape key being pressed below
+    glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
+
+    // Initialize GLEW
+    if (glewInit() != GLEW_OK) {
+        fprintf(stderr, "Failed to initialize GLEW\n");
+        glfwTerminate();
+        return -1;
+    }
 
     GLuint ProgramID = LoadShaders("shaders/SimpleVertexShader.vertexshader", "shaders/SimpleFragmentShader.fragmentshader");
     if(ProgramID == 0)
     {
        fprintf(stderr, "Failed to load shaders.\n" );
-       //getchar();
        glfwTerminate();
        return -1;
     }
 
-    model_data_t model_data = load_obj("fighter.obj", "models");
-    if(model_data.vertices == NULL)
-    {
-        fprintf(stderr, "Failed to load models.\n" );
-        glfwTerminate();
-        return -1;
-    }
-/*
-    for(int i=0;i<model_data.num_vertices*3;i++)
-        printf("%f ", model_data.colors[i]);
-*/
     GLuint vertexbuffer;
     GLuint EBO;
     GLuint VertexArrayID;
@@ -83,7 +75,7 @@ int main(/*int argc, char** argv*/)
 
     glBindVertexArray(VertexArrayID);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(model_data.vertices)*model_data.num_vertices*3, model_data.vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*model_data.num_vertices*3, model_data.vertices, GL_STATIC_DRAW);
 
     glVertexAttribPointer(
         0, // The attribute we want to configure
@@ -96,7 +88,8 @@ int main(/*int argc, char** argv*/)
     glEnableVertexAttribArray(0);
 
     glBindBuffer(GL_ARRAY_BUFFER, colorbuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(model_data.colors)*model_data.num_vertices*3, model_data.colors, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*model_data.num_vertices*3, model_data.colors, GL_STATIC_DRAW);
+
     glVertexAttribPointer(
         1,                                // Атрибут. Здесь необязательно указывать 1, но главное, чтобы это значение совпадало с layout в шейдере..
         3,                                // Размер
@@ -108,7 +101,7 @@ int main(/*int argc, char** argv*/)
     glEnableVertexAttribArray(1);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(model_data.indices)*model_data.num_faces, model_data.indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*model_data.num_faces, model_data.indices, GL_STATIC_DRAW);
 
     glBindVertexArray(0);
 
@@ -139,21 +132,22 @@ int main(/*int argc, char** argv*/)
     // Dark blue background
     glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 	do{
-        glEnable(GL_DEPTH_TEST); //| GL_CULL_FACE);
+        glEnable(GL_DEPTH_TEST | GL_CULL_FACE);
         glDepthFunc(GL_LESS);
-        //glCullFace(GL_FRONT);
+        glCullFace(GL_BACK);
         //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(ProgramID);
+
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &mvp[0][0]);
         glBindVertexArray(VertexArrayID);
 
-        // Draw the triangle !
         glDrawElements(GL_TRIANGLES, model_data.num_faces, GL_UNSIGNED_INT, 0);
+
         glBindVertexArray(0);
-		
+
 		// Swap buffers
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -162,12 +156,16 @@ int main(/*int argc, char** argv*/)
 	while( glfwGetKey(window, GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
 		   glfwWindowShouldClose(window) == 0 );
 
-    // Cleanup VBO
+    // Cleanup
+    glDeleteProgram(ProgramID);
+    free(model_data.vertices);
+    free(model_data.colors);
+    free(model_data.indices);
     glDeleteBuffers(1, &vertexbuffer);
     glDeleteBuffers(1, &EBO);
     glDeleteVertexArrays(1, &VertexArrayID);
-    glDeleteProgram(ProgramID);
-	// Close OpenGL window and terminate GLFW
+
+    // Close OpenGL window and terminate GLFW
 	glfwTerminate();
 
 	return 0;
